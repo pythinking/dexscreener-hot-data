@@ -4,92 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cryptocurrency Filter</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            margin: 0;
-            padding: 20px;
-        }
-
-        h1 {
-            text-align: center;
-            color: #333;
-        }
-
-        form {
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            max-width: 400px;
-            margin: 0 auto;
-        }
-
-        label {
-            display: block;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        input {
-            width: calc(100% - 10px);
-            padding: 8px;
-            margin-bottom: 15px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-
-        button {
-            background-color: #007bff;
-            color: #fff;
-            padding: 10px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            width: 100%;
-            font-size: 16px;
-        }
-
-        button:hover {
-            background-color: #0056b3;
-        }
-
-        h2 {
-            text-align: center;
-            margin-top: 30px;
-            color: #444;
-        }
-
-        #results {
-            margin-top: 20px;
-        }
-
-        #results div {
-            background: #fff;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        a {
-            color: #007bff;
-            text-decoration: none;
-        }
-
-        a:hover {
-            text-decoration: underline;
-        }
-
-        hr {
-            border: 0;
-            border-top: 1px solid #eee;
-            margin: 15px 0;
-        }
-    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 </head>
 <body>
     <h1>Cryptocurrency Filter</h1>
@@ -116,7 +31,12 @@
     <h2>Filtered Results:</h2>
     <div id="results"></div>
 
+    <button id="exportJson" disabled>Export to JSON</button>
+    <button id="exportExcel" disabled>Export to Excel</button>
+
     <script>
+        let currentData = [];
+
         document.getElementById('filterForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -139,6 +59,7 @@
                 });
 
                 const data = await response.json();
+                currentData = data;
 
                 // Display results
                 const resultsDiv = document.getElementById('results');
@@ -146,6 +67,8 @@
 
                 if (data.length === 0) {
                     resultsDiv.innerHTML = '<p>No pairs matched the filters.</p>';
+                    document.getElementById('exportJson').disabled = true;
+                    document.getElementById('exportExcel').disabled = true;
                 } else {
                     data.forEach(pair => {
                         const pairDiv = document.createElement('div');
@@ -163,10 +86,65 @@
                         `;
                         resultsDiv.appendChild(pairDiv);
                     });
+                    document.getElementById('exportJson').disabled = false;
+                    document.getElementById('exportExcel').disabled = false;
                 }
             } catch (error) {
                 console.error('Error:', error);
             }
+        });
+
+        // Export to JSON
+        document.getElementById('exportJson').addEventListener('click', () => {
+            const jsonBlob = new Blob([JSON.stringify(currentData, null, 2)], { type: 'application/json' });
+            const jsonUrl = URL.createObjectURL(jsonBlob);
+            const link = document.createElement('a');
+            link.href = jsonUrl;
+            link.download = 'filtered_data.json';
+            link.click();
+        });
+
+        // Export to Excel
+        document.getElementById('exportExcel').addEventListener('click', async () => {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Filtered Data');
+
+            // Add headers
+            worksheet.columns = [
+                { header: 'DEX', key: 'dexId', width: 15 },
+                { header: 'Pair Address', key: 'pairAddress', width: 40 },
+                { header: 'Base Token', key: 'baseToken', width: 25 },
+                { header: 'Quote Token', key: 'quoteToken', width: 25 },
+                { header: 'Price (USD)', key: 'priceUsd', width: 15 },
+                { header: '24H Volume (USD)', key: 'volume24h', width: 20 },
+                { header: 'Liquidity (USD)', key: 'liquidityUsd', width: 20 },
+                { header: '24H Transactions', key: 'transactions24h', width: 20 },
+                { header: 'URL', key: 'url', width: 40 },
+            ];
+
+            // Add data rows
+            currentData.forEach(pair => {
+                worksheet.addRow({
+                    dexId: pair.dexId,
+                    pairAddress: pair.pairAddress,
+                    baseToken: `${pair.baseToken.name} (${pair.baseToken.symbol})`,
+                    quoteToken: `${pair.quoteToken.name} (${pair.quoteToken.symbol})`,
+                    priceUsd: pair.priceUsd || 'N/A',
+                    volume24h: pair.volume.h24.toFixed(2),
+                    liquidityUsd: pair.liquidity.usd.toFixed(2),
+                    transactions24h: (pair.txns.h24.buys || 0) + (pair.txns.h24.sells || 0),
+                    url: pair.url,
+                });
+            });
+
+            // Save Excel file
+            const buffer = await workbook.xlsx.writeBuffer();
+            const excelBlob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const excelUrl = URL.createObjectURL(excelBlob);
+            const link = document.createElement('a');
+            link.href = excelUrl;
+            link.download = 'filtered_data.xlsx';
+            link.click();
         });
     </script>
 </body>
